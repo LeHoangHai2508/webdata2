@@ -6,6 +6,7 @@ from django.contrib.auth.models import Group
 from django.contrib.auth.decorators import login_required,user_passes_test
 from django.contrib import messages
 from django.conf import settings
+import time
 
 def home_view(request):
     products=models.Product.objects.all()
@@ -161,16 +162,20 @@ def import_products_csv(request):
                         messages.error(request, f'Invalid price format in row: {row}')
                         continue
                     
-                    # Check if product already exists
-                    if not models.Product.objects.filter(name=row['name']).exists():
-                        # Create a new product
-                        product = models.Product(
-                            name=row['name'],
-                            price=price,
-                            description=row['description']
-                        )
-                        product.save()
-                        products_created += 1
+                    # Truncate description to 40 characters
+                    description = row['description'][:40]
+                    
+                    # Create a unique name by appending a timestamp
+                    unique_name = f"{row['name']}_{int(time.time())}"
+                    
+                    # Create a new product
+                    product = models.Product(
+                        name=unique_name,
+                        price=price,
+                        description=description
+                    )
+                    product.save()
+                    products_created += 1
                 
                 messages.success(request, f'Successfully imported {products_created} products!')
                 return redirect('admin-products')
@@ -593,3 +598,28 @@ def contactus_view(request):
             send_mail(str(name)+' || '+str(email),message, settings.EMAIL_HOST_USER, settings.EMAIL_RECEIVING_USER, fail_silently = False)
             return render(request, 'ecom/contactussuccess.html')
     return render(request, 'ecom/contactus.html', {'form':sub})
+
+
+def import_products_csv(request):
+    if request.method == 'POST' and request.FILES.get('csv_file'):
+        csv_file = request.FILES['csv_file']
+        decoded_file = csv_file.read().decode('utf-8').splitlines()
+        reader = csv.reader(decoded_file)
+        next(reader)  # Bỏ header
+
+        for row in reader:
+            name, description, price, image_name = row
+            image_path = os.path.join(settings.BASE_DIR, 'static/images', image_name)
+
+            if os.path.exists(image_path):
+                with open(image_path, 'rb') as f:
+                    django_file = File(f)
+                    product = Product(
+                        name=name,
+                        description=description,
+                        price=price,
+                    )
+                    product.product_image.save(image_name, django_file, save=True)
+        return render(request, 'ecom/admin-add-product.html', {'msg': 'Import thành công!'})
+
+    return render(request, 'ecom/admin-add-product.html')

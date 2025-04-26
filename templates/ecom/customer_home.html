@@ -329,7 +329,8 @@
           <div class="el-wrapper">
             <div class="box-up">
               {% if p.product_image %}
-              <img class="img" src="{% static p.product_image.url %}" alt="product pic" height="300px" width="300px">
+              <img class="img" src="{% static 'images/' %}{{ p.product_image }}" alt="product pic" height="300px"
+                width="300px">
               {% else %}
               <img class="img" src="{% static 'images/default_product.png' %}" alt="default product pic" height="300px"
                 width="300px">

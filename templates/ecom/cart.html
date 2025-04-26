@@ -90,7 +90,7 @@ facebook : fb.com/sumit.luv
         <td> {{p.name}}</td>
         <td>
           {% if p.product_image %}
-          <img src="{% static p.product_image.url %}" alt="Product Image" height="40px" width="40px" />
+          <img src="{% static 'images/' %}{{ p.product_image }}" alt="Product Image" height="40px" width="40px" />
           {% else %}
           <img src="{% static 'images/default_product.png' %}" alt="Default Product Image" height="40px" width="40px" />
           {% endif %}

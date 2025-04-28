@@ -7,6 +7,7 @@ import urllib
 import requests
 
 from ecom.mafia.mafia_algorithm import run_mafia
+from ecom.market_basket import MarketBasketAnalysis
 from . import forms,models
 from django.http import HttpResponseRedirect,HttpResponse
 from django.core.mail import send_mail
@@ -16,7 +17,7 @@ from django.contrib import messages
 from django.conf import settings
 import time
 from .forms import ProductCSVForm
-from .models import Product
+from .models import Product, Transaction
 from django.core.files import File as DjangoFile
 from io import TextIOWrapper
 from django.contrib.staticfiles import finders
@@ -645,4 +646,45 @@ def mafia_view(request):
     return render(request, 'ecom/mafia.html', {
         'itemsets': itemsets,
         'min_support': min_sup,
+    })
+
+@login_required
+def view_transactions(request):
+    txs = Transaction.objects.select_related('order', 'product') \
+                             .order_by('-created_at')
+    grouped = {}
+    for tx in txs:
+        grouped.setdefault(tx.order.id, []).append(tx)
+    return render(request, 'ecom/view_transactions.html', {
+        'grouped_transactions': grouped
+    })
+
+@login_required(login_url='adminlogin')
+def market_basket_analysis(request):
+    # Get analysis parameters from request
+    min_support = float(request.GET.get('min_support', 0.1))
+    min_confidence = float(request.GET.get('min_confidence', 0.5))
+    
+    # Perform analysis
+    mba = MarketBasketAnalysis(min_support=min_support, min_confidence=min_confidence)
+    rules = mba.analyze()
+    
+    # Convert product IDs to product names
+    product_names = {p.id: p.name for p in models.Product.objects.all()}
+    formatted_rules = []
+    
+    for rule in rules:
+        antecedent = [product_names[pid] for pid in rule['antecedent']]
+        consequent = [product_names[pid] for pid in rule['consequent']]
+        formatted_rules.append({
+            'antecedent': antecedent,
+            'consequent': consequent,
+            'support': f"{rule['support']:.2%}",
+            'confidence': f"{rule['confidence']:.2%}"
+        })
+    
+    return render(request, 'ecom/market_basket.html', {
+        'rules': formatted_rules,
+        'min_support': min_support,
+        'min_confidence': min_confidence
     })

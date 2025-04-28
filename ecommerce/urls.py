@@ -12,6 +12,7 @@ from django.urls import path
 from ecom import views
 from django.contrib.auth.views import LoginView,LogoutView
 from django.conf.urls.static import static
+from ecom.views import view_transactions 
 urlpatterns = [
     path('admin/', admin.site.urls),
     path('',views.home_view,name=''),
@@ -22,6 +23,7 @@ urlpatterns = [
     path('search', views.search_view,name='search'),
     path('send-feedback', views.send_feedback_view,name='send-feedback'),
     path('view-feedback', views.view_feedback_view,name='view-feedback'),
+    
 
     path('adminclick', views.adminclick_view),
     path('adminlogin', LoginView.as_view(template_name='ecom/adminlogin.html'),name='adminlogin'),
@@ -40,7 +42,8 @@ urlpatterns = [
     path('admin-view-booking', views.admin_view_booking_view,name='admin-view-booking'),
     path('delete-order/<int:pk>', views.delete_order_view,name='delete-order'),
     path('update-order/<int:pk>', views.update_order_view,name='update-order'),
-
+    path('market-basket-analysis/', views.market_basket_analysis, name='market-basket-analysis'),
+    path('view-transactions/', views.view_transactions, name='view-transactions'),
 
     path('customersignup', views.customer_signup_view),
     path('customerlogin', LoginView.as_view(template_name='ecom/customerlogin.html'),name='customerlogin'),
@@ -56,7 +59,6 @@ urlpatterns = [
     path('remove-from-cart/<int:pk>', views.remove_from_cart_view,name='remove-from-cart'),
     path('customer-address', views.customer_address_view,name='customer-address'),
     path('payment-success', views.payment_success_view,name='payment-success'),
-
 
 ]
 if settings.DEBUG:

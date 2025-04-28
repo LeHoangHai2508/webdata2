@@ -5,6 +5,8 @@ from django.shortcuts import render,redirect,reverse
 import urllib
 
 import requests
+
+from ecom.mafia.mafia_algorithm import run_mafia
 from . import forms,models
 from django.http import HttpResponseRedirect,HttpResponse
 from django.core.mail import send_mail
@@ -637,3 +639,10 @@ def contactus_view(request):
             return render(request, 'ecom/contactussuccess.html')
     return render(request, 'ecom/contactus.html', {'form':sub})
 
+def mafia_view(request):
+    min_sup = int(request.GET.get('min_support', 100))
+    itemsets = run_mafia('Groceries_dataset.csv', min_sup)
+    return render(request, 'ecom/mafia.html', {
+        'itemsets': itemsets,
+        'min_support': min_sup,
+    })

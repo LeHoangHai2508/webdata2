@@ -124,10 +124,10 @@ USE_TZ = True
 # https://docs.djangoproject.com/en/3.0/howto/static-files/
 
 STATIC_URL = '/static/'
+STATICFILES_DIRS = [STATIC_DIR]
 
-STATICFILES_DIRS=[STATIC_DIR,]
+STATIC_ROOT = os.path.join(BASE_DIR, 'staticfiles')
 
-MEDIA_ROOT=os.path.join(BASE_DIR,'static')
 
 
 
@@ -146,3 +146,5 @@ EMAIL_HOST_PASSWORD = '123' # host email password required
 # otherwise you will get SMTPAuthenticationError at /contactus
 # this process is required because google blocks apps authentication by default
 EMAIL_RECEIVING_USER = ['ductrong051120004@gmail.com'] # email on which you will receive messages sent from website
+MEDIA_URL = '/media/'
+MEDIA_ROOT = os.path.join(BASE_DIR, 'media')

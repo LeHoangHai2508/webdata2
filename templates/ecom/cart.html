@@ -115,6 +115,21 @@ facebook : fb.com/sumit.luv
   <button class="button button2">Total {{total}}</button>
   <a href="/customer-address"><button class="button"><span>Purchase </span></button></a>
 </div>
+{% if recommendations %}
+<div class="suggestions">
+  <h2>Gợi ý cho bạn</h2>
+  <ul>
+    {% for rec in recommendations %}
+    <li>
+      {# rec là một tập item, chúng ta hiển thị tên hoặc link #}
+      {% for prod_name in rec %}
+      <a href="{% url 'product_detail' prod_name %}">{{ prod_name }}</a>{% if not forloop.last %}, {% endif %}
+      {% endfor %}
+    </li>
+    {% endfor %}
+  </ul>
+</div>
+{% endif %}
 
 
 <br><br><br><br><br>

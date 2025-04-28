@@ -1,4 +1,10 @@
+import csv
+import os
+from warnings import filters
 from django.shortcuts import render,redirect,reverse
+import urllib
+
+import requests
 from . import forms,models
 from django.http import HttpResponseRedirect,HttpResponse
 from django.core.mail import send_mail
@@ -7,6 +13,12 @@ from django.contrib.auth.decorators import login_required,user_passes_test
 from django.contrib import messages
 from django.conf import settings
 import time
+from .forms import ProductCSVForm
+from .models import Product
+from django.core.files import File as DjangoFile
+from io import TextIOWrapper
+from django.contrib.staticfiles import finders
+from django.core.files.base import ContentFile
 
 def home_view(request):
     products=models.Product.objects.all()
@@ -131,62 +143,88 @@ def admin_products_view(request):
 
 @login_required(login_url='adminlogin')
 def import_products_csv(request):
-    if request.method == 'POST':
-        form = forms.ProductCSVForm(request.POST, request.FILES)
-        if form.is_valid():
-            csv_file = request.FILES['csv_file']
-            if not csv_file.name.endswith('.csv'):
-                messages.error(request, 'Please upload a CSV file')
-                return redirect('import-products-csv')
-            
-            try:
-                import csv
-                from io import TextIOWrapper
-                
-                # Read the CSV file
-                csv_file = TextIOWrapper(csv_file.file, encoding='utf-8')
-                csv_reader = csv.DictReader(csv_file)
-                
-                # Process each row
-                products_created = 0
-                for row in csv_reader:
-                    # Check if all required fields are present
-                    if not all(key in row for key in ['name', 'price', 'description']):
-                        messages.error(request, 'CSV file must contain name, price, and description columns')
-                        return redirect('import-products-csv')
-                    
-                    # Convert price to integer
-                    try:
-                        price = int(row['price'])
-                    except ValueError:
-                        messages.error(request, f'Invalid price format in row: {row}')
-                        continue
-                    
-                    # Truncate description to 40 characters
-                    description = row['description'][:40]
-                    
-                    # Create a unique name by appending a timestamp
-                    unique_name = f"{row['name']}_{int(time.time())}"
-                    
-                    # Create a new product
-                    product = models.Product(
-                        name=unique_name,
-                        price=price,
-                        description=description
-                    )
-                    product.save()
-                    products_created += 1
-                
-                messages.success(request, f'Successfully imported {products_created} products!')
-                return redirect('admin-products')
-            except Exception as e:
-                messages.error(request, f'Error importing products: {str(e)}')
-                return redirect('import-products-csv')
-    else:
-        form = forms.ProductCSVForm()
-    
-    return render(request, 'ecom/import_products.html', {'form': form})
+   # Load form + existing products
+    products = Product.objects.all()
+    form = ProductCSVForm(request.POST or None, request.FILES or None)
 
+    if request.method == 'POST' and form.is_valid():
+        csv_file = form.cleaned_data['csv_file']
+        # Kiểm tra extension .csv
+        if not csv_file.name.lower().endswith('.csv'):
+            messages.error(request, 'File phải có định dạng .csv')
+            return redirect('import-products-csv')
+
+        # Đọc nội dung
+        data_lines = csv_file.read().decode('utf-8').splitlines()
+        reader = csv.DictReader(data_lines)
+        created = 0
+
+        for idx, row in enumerate(reader, start=1):
+            name = row.get('name', '').strip()
+            price = row.get('price', '').strip()
+            desc  = row.get('description', '').strip()[:40]
+            img   = row.get('image', '').strip()
+
+            print(f"[DEBUG] Row {idx}: name={name}, price={price}, image={img}")
+
+            # Tạo đối tượng nhưng chưa save
+            try:
+                price_int = int(price)
+            except ValueError:
+                messages.warning(request, f"Row {idx}: Giá không hợp lệ, skip")
+                continue
+
+            product = Product(
+                name=name + f"_{int(time.time())}",
+                price=price_int,
+                description=desc
+            )
+
+            # Xử lý image
+            if img.lower().startswith('http://') or img.lower().startswith('https://'):
+                # Download từ URL
+                try:
+                    resp = requests.get(img, timeout=10)
+                    resp.raise_for_status()
+                    print(f"[DEBUG] Downloaded {len(resp.content)} bytes from {img}")
+                    filename = os.path.basename(img.split('?')[0]) or f"img_{idx}.jpg"
+                    product.product_image.save(
+                        filename,
+                        ContentFile(resp.content),
+                        save=False
+                    )
+                    print(f"[DEBUG] Saved image to product_image/{filename}")
+                except Exception as e:
+                    print(f"[DEBUG] Error downloading {img}: {e}")
+                    messages.warning(request, f"Row {idx}: Không tải được ảnh từ URL")
+            else:
+                # Fallback static
+                static_path = finders.find(img)
+                if static_path and os.path.isfile(static_path):
+                    with open(static_path, 'rb') as f:
+                        data = f.read()
+                        product.product_image.save(
+                            os.path.basename(img),
+                            ContentFile(data),
+                            save=False
+                        )
+                    print(f"[DEBUG] Copied static {img} into media/product_image/")
+                else:
+                    print(f"[DEBUG] Static image not found: {img}")
+                    messages.warning(request, f"Row {idx}: Không tìm thấy static image {img}")
+
+            # Save product
+            product.save()
+            created += 1
+
+        messages.success(request, f'Imported {created} products!')
+        # Sau khi import xong, làm mới form
+        return redirect('import-products-csv')
+
+    return render(request, 'ecom/import_products.html', {
+        'form': form,
+        'products': products,
+    })
 
 # admin add product by clicking on floating button
 @login_required(login_url='adminlogin')
@@ -599,27 +637,3 @@ def contactus_view(request):
             return render(request, 'ecom/contactussuccess.html')
     return render(request, 'ecom/contactus.html', {'form':sub})
 
-
-def import_products_csv(request):
-    if request.method == 'POST' and request.FILES.get('csv_file'):
-        csv_file = request.FILES['csv_file']
-        decoded_file = csv_file.read().decode('utf-8').splitlines()
-        reader = csv.reader(decoded_file)
-        next(reader)  # Bỏ header
-
-        for row in reader:
-            name, description, price, image_name = row
-            image_path = os.path.join(settings.BASE_DIR, 'static/images', image_name)
-
-            if os.path.exists(image_path):
-                with open(image_path, 'rb') as f:
-                    django_file = File(f)
-                    product = Product(
-                        name=name,
-                        description=description,
-                        price=price,
-                    )
-                    product.product_image.save(image_name, django_file, save=True)
-        return render(request, 'ecom/admin-add-product.html', {'msg': 'Import thành công!'})
-
-    return render(request, 'ecom/admin-add-product.html')

@@ -1,16 +1,2 @@
-name,price,description
-Tropical Fruit,15000,Fresh tropical fruits including mango, pineapple, and papaya
-Whole Milk,25000,1 liter of fresh whole milk
-Pip Fruit,12000,Assorted pip fruits including apples and pears
-Other Vegetables,18000,Fresh seasonal vegetables
-Rolls/Buns,8000,Freshly baked rolls and buns
-Pot Plants,35000,Indoor and outdoor potted plants
-Citrus Fruit,14000,Fresh citrus fruits including oranges and lemons
-Beef,45000,Premium quality beef cuts
-Frankfurter,20000,Traditional German frankfurters
-Chicken,35000,Whole fresh chicken
-Butter,22000,Premium quality butter
-Fruit Juice,15000,100% natural fruit juice
-Packaged Vegetables,16000,Pre-cut and packaged vegetables
-Chocolate,12000,Assorted chocolates
-Specialty Bar,10000,Specialty chocolate and nut bars 
+name,price,description,image
+Tropical Fruit,99999999,Best value daily essential, product_image/canon1.jpeg

@@ -1,0 +1,39 @@
+{% extends 'ecom/admin_base.html' %}
+{% load static %}
+{% block content %}
+<div class="container mt-4">
+    <h2>Gợi ý sản phẩm từ giỏ hàng hiện tại</h2>
+
+    <form method="post">
+        {% csrf_token %}
+        <div class="form-group">
+            <label>Nhập giỏ hàng (phân tách bằng dấu phẩy):</label>
+            <input type="text" name="basket" class="form-control" placeholder="e.g. Bread, Butter">
+        </div>
+        <button type="submit" class="btn btn-primary mt-2">Gợi ý</button>
+    </form>
+
+    {% if recommendations %}
+    <hr>
+    <h4>Kết quả gợi ý:</h4>
+    <table class="table table-bordered mt-3">
+        <thead>
+            <tr>
+                <th>Giỏ hàng hiện tại</th>
+                <th>Gợi ý bổ sung</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for r in recommendations %}
+            <tr>
+                <td>{{ r.from }}</td>
+                <td>{{ r.suggest }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    {% elif input_items %}
+    <p class="mt-3">Không có gợi ý phù hợp.</p>
+    {% endif %}
+</div>
+{% endblock %}

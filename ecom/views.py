@@ -19,7 +19,7 @@ from .forms import ProductCSVForm, TransactionCSVForm
 from io import TextIOWrapper
 from .models import Transaction, Orders, Product
 import csv, ast
-from ecom.mafia import find_maximal_itemsets, find_maximal_itemsets_and_rules
+from ecom.mafia import find_maximal_itemsets, find_maximal_itemsets_and_rules, mafia
 
 
 def home_view(request):
@@ -872,4 +872,121 @@ def mafia_recommend_view(request):
     return render(request, 'ecom/mafia_recommend.html', {
         'input_items': input_items,
         'recommendations': recommendations
+    })
+
+def generate_association_rules(mfi_itemsets, transactions, min_confidence):
+    from itertools import chain, combinations
+    import math
+
+    # Đếm số giao dịch chứa mỗi itemset
+    def count_support(itemset):
+        return sum(1 for t in transactions if itemset.issubset(set(t)))
+
+    rules = []
+    total_transactions = len(transactions)
+
+    for itemset in mfi_itemsets:
+        itemset = set(itemset)
+        if len(itemset) < 2:
+            continue
+
+        for i in range(1, len(itemset)):
+            for lhs in combinations(itemset, i):
+                lhs = set(lhs)
+                rhs = itemset - lhs
+                if not rhs:
+                    continue
+
+                lhs_support_count = count_support(lhs)
+                full_support_count = count_support(itemset)
+
+                if lhs_support_count == 0:
+                    continue
+
+                confidence = full_support_count / lhs_support_count
+
+                if confidence >= min_confidence:
+                    rhs_support_count = count_support(rhs)
+                    lift = confidence / (rhs_support_count / total_transactions) if rhs_support_count > 0 else 0
+                    rules.append({
+                        'lhs': ', '.join(sorted(lhs)),
+                        'rhs': ', '.join(sorted(rhs)),
+                        'support': round(full_support_count / total_transactions, 2),
+                        'confidence': round(confidence, 2),
+                        'lift': round(lift, 2),
+                        'frequency': full_support_count
+                    })
+
+    return sorted(rules, key=lambda x: (-x['confidence'], -x['support']))
+
+
+@login_required(login_url='adminlogin')
+def mafia_recommend_view(request):
+    from .mafia import find_maximal_itemsets
+    import itertools
+
+    table_data = request.session.get('mafia_data', [])
+    transactions = [[item.strip() for item in row['items'].split(',')] for row in table_data]
+
+    recommendations = []
+    input_items = []
+
+    min_conf_str = str(request.GET.get('min_conf', '0.5')).replace(',', '.')
+    min_conf = float(min_conf_str)
+
+    if request.method == 'POST':
+        basket_raw = request.POST.get('basket', '')
+        input_items = [item.strip() for item in basket_raw.split(',') if item.strip()]
+
+        if input_items:
+            # Tính minsup từ dữ liệu đã lưu
+            minsup_ratio = float(request.GET.get('minsup', 0.3))
+            minsup = max(int(minsup_ratio * len(transactions)), 1)
+            tidsets = defaultdict(set)
+            for tid, transaction in enumerate(transactions):
+                for item in transaction:
+                    tidsets[item].add(tid)
+
+            all_tids = set(range(len(transactions)))
+            items = sorted(tidsets.keys())
+            MFI = []
+            mafia(set(), items, tidsets, minsup, MFI, all_tids)
+
+            # Sinh luật từ tập phổ biến cực đại
+            rules = []
+            for itemset in MFI:
+                if len(itemset) < 2:
+                    continue
+                for i in range(1, len(itemset)):
+                    for lhs in itertools.combinations(itemset, i):
+                        lhs = set(lhs)
+                        rhs = itemset - lhs
+                        lhs_support = sum(1 for t in transactions if lhs.issubset(t))
+                        both_support = sum(1 for t in transactions if lhs.union(rhs).issubset(t))
+
+                        if lhs_support == 0:
+                            continue
+
+                        conf = both_support / lhs_support
+
+                        if conf >= min_conf:
+                            rules.append({
+                                'lhs': lhs,
+                                'rhs': rhs,
+                                'confidence': conf
+                            })
+
+            # Áp dụng luật cho giỏ hàng hiện tại
+            for rule in rules:
+                if rule['lhs'].issubset(set(input_items)):
+                    suggest_items = rule['rhs'] - set(input_items)
+                    if suggest_items:
+                        recommendations.append({
+                            'from': ', '.join(sorted(rule['lhs'])),
+                            'suggest': ', '.join(sorted(suggest_items))
+                        })
+
+    return render(request, 'ecom/mafia_recommend.html', {
+        'recommendations': recommendations,
+        'input_items': input_items
     })

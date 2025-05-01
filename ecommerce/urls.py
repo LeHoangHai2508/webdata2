@@ -42,8 +42,9 @@ urlpatterns = [
     path('admin-view-booking', views.admin_view_booking_view,name='admin-view-booking'),
     path('delete-order/<int:pk>', views.delete_order_view,name='delete-order'),
     path('update-order/<int:pk>', views.update_order_view,name='update-order'),
-    path('market-basket-analysis/', views.market_basket_analysis, name='market-basket-analysis'),
+    path('basket-market/', views.basket_market_view, name='basket-market'),
     path('view-transactions/', views.view_transactions, name='view-transactions'),
+    path('recommend-mafia/', views.mafia_recommend_view, name='recommend-mafia'),
 
     path('customersignup', views.customer_signup_view),
     path('customerlogin', LoginView.as_view(template_name='ecom/customerlogin.html'),name='customerlogin'),

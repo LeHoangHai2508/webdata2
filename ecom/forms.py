@@ -46,3 +46,6 @@ class ContactusForm(forms.Form):
 
 class ProductCSVForm(forms.Form):
     csv_file = forms.FileField(label='Select CSV file')
+    
+class TransactionCSVForm(forms.Form):
+    csv_file = forms.FileField(label='Select CSV File')

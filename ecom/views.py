@@ -1,13 +1,8 @@
-import csv
 import os
-from warnings import filters
+import time
 from django.shortcuts import render,redirect,reverse
-import urllib
-
+from django.contrib.staticfiles import finders
 import requests
-
-from ecom.mafia.mafia_algorithm import run_mafia
-from ecom.market_basket import MarketBasketAnalysis
 from . import forms,models
 from django.http import HttpResponseRedirect,HttpResponse
 from django.core.mail import send_mail
@@ -15,13 +10,17 @@ from django.contrib.auth.models import Group
 from django.contrib.auth.decorators import login_required,user_passes_test
 from django.contrib import messages
 from django.conf import settings
-import time
-from .forms import ProductCSVForm
-from .models import Product, Transaction
-from django.core.files import File as DjangoFile
-from io import TextIOWrapper
-from django.contrib.staticfiles import finders
+from collections import defaultdict
+from . import models
+from django.db.models import Prefetch
 from django.core.files.base import ContentFile
+from django.shortcuts import render
+from .forms import ProductCSVForm, TransactionCSVForm
+from io import TextIOWrapper
+from .models import Transaction, Orders, Product
+import csv, ast
+from ecom.mafia import find_maximal_itemsets
+
 
 def home_view(request):
     products=models.Product.objects.all()
@@ -640,51 +639,137 @@ def contactus_view(request):
             return render(request, 'ecom/contactussuccess.html')
     return render(request, 'ecom/contactus.html', {'form':sub})
 
-def mafia_view(request):
-    min_sup = int(request.GET.get('min_support', 100))
-    itemsets = run_mafia('Groceries_dataset.csv', min_sup)
-    return render(request, 'ecom/mafia.html', {
-        'itemsets': itemsets,
-        'min_support': min_sup,
+
+@login_required(login_url='adminlogin')
+def view_transactions(request):
+    form = TransactionCSVForm()
+
+    # Khởi tạo dữ liệu mặc định nếu không phải POST
+    table_data = request.session.get('mafia_data', [])
+    freq_table_sorted = []
+    maximal_table = []
+
+    # Khi người dùng POST CSV lên
+    if request.method == 'POST':
+        form = TransactionCSVForm(request.POST, request.FILES)
+        if form.is_valid():
+            csv_file = request.FILES['csv_file']
+            if not csv_file.name.endswith('.csv'):
+                messages.error(request, 'Vui lòng tải lên file CSV.')
+            else:
+                try:
+                    csv_reader = csv.DictReader(TextIOWrapper(csv_file.file, encoding='utf-8'))
+                    table_data = []
+
+                    for row in csv_reader:
+                        transaction_id = row.get('Transaction ID')
+                        items_str = row.get('Items')
+
+                        if not transaction_id or not items_str:
+                            continue
+
+                        try:
+                            items = ast.literal_eval(items_str)
+                            formatted_items = ', '.join(sorted(items))
+                            table_data.append({
+                                'order_id': transaction_id,
+                                'items': formatted_items
+                            })
+                        except Exception as e:
+                            messages.warning(request, f"Lỗi dòng {transaction_id}: {str(e)}")
+
+                    request.session['mafia_data'] = table_data
+                    messages.success(request, f"Đã import {len(table_data)} giao dịch.")
+                except Exception as e:
+                    messages.error(request, f"Lỗi xử lý file: {str(e)}")
+
+    # Tính tần suất sản phẩm nếu có dữ liệu
+    if table_data:
+        freq_count = {}
+        for row in table_data:
+            items = [item.strip() for item in row['items'].split(',')]
+            for item in items:
+                freq_count.setdefault(item, set()).add(row['order_id'])
+
+        freq_table = [{
+            'product_name': product,
+            'order_ids': sorted(order_ids),
+            'count': len(order_ids)
+        } for product, order_ids in freq_count.items()]
+        freq_table_sorted = sorted(freq_table, key=lambda x: -x['count'])
+
+        # Gọi thuật toán MAFIA
+        from .mafia import find_maximal_itemsets
+        transactions = [[item.strip() for item in row['items'].split(',')] for row in table_data]
+        mfi_result = find_maximal_itemsets(transactions, min_support=0.3)
+        # Lưu vào session để gợi ý sau này
+        request.session['mafia_maximal_itemsets'] = [list(s) for s in mfi_result]
+
+        maximal_table = [{
+            'index': i + 1,
+            'itemset': ', '.join(sorted(itemset)),
+            'length': len(itemset)
+        } for i, itemset in enumerate(mfi_result)]
+
+    return render(request, 'ecom/view_transactions_mafia.html', {
+        'form': form,
+        'table_data': table_data,
+        'freq_table': freq_table_sorted,
+        'maximal_table': maximal_table
     })
 
-@login_required
-def view_transactions(request):
-    txs = Transaction.objects.select_related('order', 'product') \
-                             .order_by('-created_at')
-    grouped = {}
-    for tx in txs:
-        grouped.setdefault(tx.order.id, []).append(tx)
-    return render(request, 'ecom/view_transactions.html', {
-        'grouped_transactions': grouped
+
+
+@login_required(login_url='adminlogin')
+def basket_market_view(request):
+    result = []
+    min_support = float(request.GET.get('min_support', 0.3))
+
+    transactions = request.session.get('mafia_data', [])
+    if not transactions:
+        messages.warning(request, "Vui lòng import transaction trước.")
+        return redirect('view-transactions')
+
+    basket = [[item.strip() for item in row['items'].split(',')] for row in transactions]
+
+    from .mafia import find_maximal_itemsets
+    maximal_sets = find_maximal_itemsets(basket, min_support=min_support)
+
+    result = [{
+        'index': i + 1,
+        'itemset': ', '.join(sorted(itemset)),
+        'length': len(itemset)
+    } for i, itemset in enumerate(maximal_sets)]
+
+    return render(request, 'ecom/basket_market.html', {
+        'result': result,
+        'min_support': min_support
     })
 
 @login_required(login_url='adminlogin')
-def market_basket_analysis(request):
-    # Get analysis parameters from request
-    min_support = float(request.GET.get('min_support', 0.1))
-    min_confidence = float(request.GET.get('min_confidence', 0.5))
-    
-    # Perform analysis
-    mba = MarketBasketAnalysis(min_support=min_support, min_confidence=min_confidence)
-    rules = mba.analyze()
-    
-    # Convert product IDs to product names
-    product_names = {p.id: p.name for p in models.Product.objects.all()}
-    formatted_rules = []
-    
-    for rule in rules:
-        antecedent = [product_names[pid] for pid in rule['antecedent']]
-        consequent = [product_names[pid] for pid in rule['consequent']]
-        formatted_rules.append({
-            'antecedent': antecedent,
-            'consequent': consequent,
-            'support': f"{rule['support']:.2%}",
-            'confidence': f"{rule['confidence']:.2%}"
-        })
-    
-    return render(request, 'ecom/market_basket.html', {
-        'rules': formatted_rules,
-        'min_support': min_support,
-        'min_confidence': min_confidence
+def mafia_recommend_view(request):
+    maximal_itemsets = request.session.get('mafia_maximal_itemsets', [])
+    recommendations = []
+    input_items = []
+
+    if request.method == 'POST':
+        input_items_str = request.POST.get('basket', '')
+        try:
+            input_items = [i.strip() for i in input_items_str.split(',') if i.strip()]
+            input_set = set(input_items)
+
+            for mfi in maximal_itemsets:
+                mfi_set = set(mfi)
+                if input_set.issubset(mfi_set) and input_set != mfi_set:
+                    recommendations.append({
+                        'from': ', '.join(input_items),
+                        'suggest': ', '.join(sorted(mfi_set - input_set))
+                    })
+
+        except Exception as e:
+            messages.warning(request, f"Lỗi: {str(e)}")
+
+    return render(request, 'ecom/mafia_recommend.html', {
+        'input_items': input_items,
+        'recommendations': recommendations
     })

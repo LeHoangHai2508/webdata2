@@ -1,21 +1,21 @@
-Transaction ID,Items
-1,"['Artif. Sweetener', 'Pasta', 'Whipped/Sour Cream', 'Cling Film/Bags']"
-2,"['Citrus Fruit', 'Frozen Dessert']"
-3,"['Domestic Eggs', 'Ice Cream', 'Nuts/Prunes', 'Vinegar']"
-4,"['Butter Milk', 'Whole Milk', 'Pet Care', 'Fish', 'Turkey']"
-5,"['Coffee', 'Hamburger Meat', 'Cling Film/Bags']"
-6,"['Tropical Fruit', 'Vinegar', 'Cleaner']"
-7,"['Pet Care', 'Hygiene Articles', 'Herbs', 'Liquor']"
-8,"['White Bread', 'Beef', 'Whole Milk', 'Specialty Cheese']"
-9,"['Tropical Fruit', 'Uht-Milk', 'Berries']"
-10,"['Cleaner', 'Packaged Fruit/Vegetables']"
-11,"['Liquor (Appetizer)', 'Frozen Meals', 'Female Sanitary Products', 'Brown Bread']"
-12,"['Grapes', 'Fruit/Vegetable Juice', 'Decalcifier', 'White Bread', 'Pot Plants']"
-13,"['Butter Milk', 'Instant Food Products']"
-14,"['Berries', 'Processed Cheese', 'Butter Milk', 'Candy', 'Fish']"
-15,"['Finished Products', 'Pickled Vegetables']"
-16,"['Female Sanitary Products', 'Meat', 'Citrus Fruit', 'Butter']"
-17,"['Instant Food Products', 'Tropical Fruit', 'Berries']"
-18,"['Dish Cleaner', 'Ham', 'Dog Food', 'Rolls/Buns']"
-19,"['Sugar', 'Newspapers', 'Condensed Milk']"
-20,"['Spread Cheese', 'Citrus Fruit', 'Frozen Meals', 'Whipped/Sour Cream']"
+Transaction ID,Items,Customer Name,Customer Mobile,Shipment Address
+1,"['Artif. Sweetener', 'Pasta', 'Whipped/Sour Cream', 'Cling Film/Bags']",Nguyễn Văn A,0912345678,123 Lê Lợi, TP.HCM
+2,"['Citrus Fruit', 'Frozen Dessert']",Trần Thị B,0987654321,456 Nguyễn Huệ, Hà Nội
+3,"['Domestic Eggs', 'Ice Cream', 'Nuts/Prunes', 'Vinegar']",Lê Văn C,0933322111,789 Trần Phú, Đà Nẵng
+4,"['Butter Milk', 'Whole Milk', 'Pet Care', 'Fish', 'Turkey']",Phạm Thị D,0909090909,12 Hai Bà Trưng, Cần Thơ
+5,"['Coffee', 'Hamburger Meat', 'Cling Film/Bags']",Đỗ Minh E,0977554433,21 Nguyễn Trãi, Huế
+6,"['Tropical Fruit', 'Vinegar', 'Cleaner']",Võ Thị F,0911223344,34 Hùng Vương, Hải Phòng
+7,"['Pet Care', 'Hygiene Articles', 'Herbs', 'Liquor']",Trịnh Văn G,0955667788,56 Lý Thường Kiệt, Quảng Ninh
+8,"['White Bread', 'Beef', 'Whole Milk', 'Specialty Cheese']",Lý Thị H,0966778899,87 Điện Biên Phủ, TP.HCM
+9,"['Tropical Fruit', 'Uht-Milk', 'Berries']",Ngô Văn I,0939393939,98 Nguyễn Đình Chiểu, Bình Dương
+10,"['Cleaner', 'Packaged Fruit/Vegetables']",Bùi Thị K,0928282828,76 Phan Đình Phùng, Bến Tre
+11,"['Liquor (Appetizer)', 'Frozen Meals', 'Female Sanitary Products', 'Brown Bread']",Đặng Minh L,0947474747,19 Võ Văn Tần, Long An
+12,"['Grapes', 'Fruit/Vegetable Juice', 'Decalcifier', 'White Bread', 'Pot Plants']",Phan Văn M,0908808808,105 Trường Chinh, TP.HCM
+13,"['Butter Milk', 'Instant Food Products']",Trương Thị N,0919191919,42 Cách Mạng Tháng 8, Nha Trang
+14,"['Berries', 'Processed Cheese', 'Butter Milk', 'Candy', 'Fish']",Hồ Văn O,0979797979,35 Pasteur, Đà Lạt
+15,"['Finished Products', 'Pickled Vegetables']",Mai Thị P,0938383838,66 Nguyễn Văn Cừ, Vũng Tàu
+16,"['Female Sanitary Products', 'Meat', 'Citrus Fruit', 'Butter']",Vũ Văn Q,0968686868,123 Hòa Bình, Đồng Nai
+17,"['Instant Food Products', 'Tropical Fruit', 'Berries']",Tạ Thị R,0959595959,99 Phan Chu Trinh, Tây Ninh
+18,"['Dish Cleaner', 'Ham', 'Dog Food', 'Rolls/Buns']",Lương Minh S,0987878787,51 Lê Quang Định, Gia Lai
+19,"['Sugar', 'Newspapers', 'Condensed Milk']",Châu Thị T,0927272727,44 Quang Trung, Quảng Ngãi
+20,"['Spread Cheese', 'Citrus Fruit', 'Frozen Meals', 'Whipped/Sour Cream']",Huỳnh Văn U,0910101010,28 Trần Hưng Đạo, Sóc Trăng

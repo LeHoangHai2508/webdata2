@@ -63,7 +63,9 @@ class Transaction(models.Model):
     product = models.ForeignKey(Product, on_delete=models.CASCADE)
     quantity = models.IntegerField(default=1)
     created_at = models.DateTimeField(auto_now_add=True)
-
+    customer_name = models.CharField(max_length=100, null=True, blank=True)
+    customer_mobile = models.CharField(max_length=20, null=True, blank=True)
+    shipment_address = models.TextField(null=True, blank=True)
     class Meta:
         unique_together = ('order', 'product')
 

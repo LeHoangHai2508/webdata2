@@ -19,7 +19,7 @@ from .forms import ProductCSVForm, TransactionCSVForm
 from io import TextIOWrapper
 from .models import Transaction, Orders, Product
 import csv, ast
-from ecom.mafia import find_maximal_itemsets
+from ecom.mafia import find_maximal_itemsets, find_maximal_itemsets_and_rules
 
 
 def home_view(request):
@@ -258,18 +258,33 @@ def update_product_view(request,pk):
             return redirect('admin-products')
     return render(request,'ecom/admin_update_product.html',{'productForm':productForm})
 
-
+# thêm dữ liệu sử dụng chung với transaction
+def get_all_orders_data():
+    """
+    Trả về danh sách dict chứa thông tin từng đơn hàng:
+    - product
+    - customer
+    - order
+    """
+    from .models import Orders, Product, Customer
+    data = []
+    orders = Orders.objects.select_related('customer__user', 'product').all()
+    for order in orders:
+        entry = {
+            'order_id': order.id,
+            'product': order.product,
+            'customer_name': order.customer.user.get_full_name() if order.customer else '',
+            'customer_mobile': order.mobile,
+            'shipment_address': order.address,
+            'status': order.status,
+            'order_date': order.order_date,
+        }
+        data.append(entry)
+    return data
 @login_required(login_url='adminlogin')
 def admin_view_booking_view(request):
-    orders=models.Orders.objects.all()
-    ordered_products=[]
-    ordered_bys=[]
-    for order in orders:
-        ordered_product=models.Product.objects.all().filter(id=order.product.id)
-        ordered_by=models.Customer.objects.all().filter(id = order.customer.id)
-        ordered_products.append(ordered_product)
-        ordered_bys.append(ordered_by)
-    return render(request,'ecom/admin_view_booking.html',{'data':zip(ordered_products,ordered_bys,orders)})
+    orders_data = get_all_orders_data()
+    return render(request, 'ecom/admin_view_booking.html', {'orders_data': orders_data})
 
 
 @login_required(login_url='adminlogin')
@@ -517,6 +532,16 @@ def payment_success_view(request):
     if 'address' in request.COOKIES:
         address=request.COOKIES['address']
 
+    for product in products:
+        order_obj, created = models.Orders.objects.get_or_create(
+            customer=customer,
+            product=product,
+            status='Pending',
+            email=email,
+            mobile=mobile,
+            address=address
+        )
+       
     # here we are placing number of orders as much there is a products
     # suppose if we have 5 items in cart and we place order....so 5 rows will be created in orders table
     # there will be lot of redundant data in orders table...but its become more complicated if we normalize it
@@ -658,58 +683,133 @@ def view_transactions(request):
                 messages.error(request, 'Vui lòng tải lên file CSV.')
             else:
                 try:
-                    csv_reader = csv.DictReader(TextIOWrapper(csv_file.file, encoding='utf-8'))
+                    reader = csv.DictReader(TextIOWrapper(csv_file.file, encoding='utf-8'))
                     table_data = []
-
-                    for row in csv_reader:
-                        transaction_id = row.get('Transaction ID')
+                    for row in reader:
+                        tx_id = row.get('Transaction ID')
                         items_str = row.get('Items')
-
-                        if not transaction_id or not items_str:
+                        if not tx_id or not items_str:
                             continue
+                        # parse items list
+                        items = ast.literal_eval(items_str)
+                        formatted = ', '.join(sorted(items))
+                        # chuẩn bị entry bao gồm thông tin transaction và customer
+                        entry = {
+                            'order_id': tx_id,
+                            'items': formatted,
+                            'customer_name': row.get('Customer Name', '').strip(),
+                            'customer_mobile': row.get('Customer Mobile', '').strip(),
+                            'shipment_address': row.get('Shipment Address', '').strip(),
+                        }
+                        table_data.append(entry)
 
-                        try:
-                            items = ast.literal_eval(items_str)
-                            formatted_items = ', '.join(sorted(items))
-                            table_data.append({
-                                'order_id': transaction_id,
-                                'items': formatted_items
-                            })
-                        except Exception as e:
-                            messages.warning(request, f"Lỗi dòng {transaction_id}: {str(e)}")
+                    # Nếu CSV không có đầy đủ customer info, enrich từ DB
+                    for entry in table_data:
+                        if not entry['customer_name'] or not entry['customer_mobile'] or not entry['shipment_address']:
+                            sample_tx = Transaction.objects.filter(order__id=entry['order_id'])\
+                                .select_related('order__customer__user','order').first()
+                            if sample_tx:
+                                cust = sample_tx.order.customer
+                                entry['customer_name'] = entry['customer_name'] or cust.user.get_full_name() or cust.user.username
+                                entry['customer_mobile'] = entry['customer_mobile'] or sample_tx.order.mobile
+                                entry['shipment_address'] = entry['shipment_address'] or sample_tx.order.address
 
                     request.session['mafia_data'] = table_data
                     messages.success(request, f"Đã import {len(table_data)} giao dịch.")
+                    imported_order_ids = {entry['order_id'] for entry in table_data}
+                    # Lấy các order khác từ DB không có trong CSV
+                    db_data = get_all_orders_data()
+                    for entry in db_data:
+                        if entry['order_id'] not in imported_order_ids:
+                            table_data.append({
+                                'order_id': entry['order_id'],
+                                'customer_name': entry['customer_name'],
+                                'customer_mobile': entry['customer_mobile'],
+                                'shipment_address': entry['shipment_address'],
+                                'items': entry['product'].name,
+                            })
+                    # Lưu lại toàn bộ vào session
+                    request.session['mafia_data'] = table_data
                 except Exception as e:
-                    messages.error(request, f"Lỗi xử lý file: {str(e)}")
+                    messages.error(request, f"Lỗi xử lý CSV: {e}")
+      # 2) ĐỒNG BỘ ĐƠN MỚI TỪ ORDERS VÀO TRANSACTION
+    # Loại bỏ những orders đã có trong transactions
+    existing_ids = list(Transaction.objects.values_list('order_id', flat=True))
+    unsynced_orders = Orders.objects.exclude(id__in=existing_ids)
+    for order in unsynced_orders:
+        Transaction.objects.create(
+            order=order,
+            product=order.product,
+            quantity=getattr(order, 'quantity', 1)
+        )
 
+    if unsynced_orders.exists():
+        request.session.pop('mafia_data', None)
+    # 3) LOAD DỮ LIỆU CHO VIEW
+   # ưu tiên dữ liệu import CSV từ session (nếu là POST CSV)
+    order_data = get_all_orders_data()
+    
+    if not table_data:
+        
+        grouped = defaultdict(list)
+        for entry in order_data:
+            grouped[entry['order_id']].append(entry['product'].name)
+
+        table_data = []
+        for oid, items in grouped.items():
+            sample = next(e for e in order_data if e['order_id'] == oid)
+            table_data.append({
+                'order_id': oid,
+                'customer_name': sample['customer_name'],
+                'customer_mobile': sample['customer_mobile'],
+                'shipment_address': sample['shipment_address'],
+                'items': ', '.join(sorted(items)),
+            })
+        request.session['mafia_data'] = table_data
+    # ưu tiên session sau POST CSV
+    if not table_data:
+        table_data = request.session.get('mafia_data', [])
+        if not table_data:
+            qs = Transaction.objects.select_related('order', 'product').all()
+            grouped = defaultdict(list)
+            for t in qs:
+                grouped[t.order.id].append(t.product.name)
+            table_data = [
+                {'order_id': oid, 'items': ', '.join(sorted(items))}
+                for oid, items in grouped.items()
+            ]
+            request.session['mafia_data'] = table_data
     # Tính tần suất sản phẩm nếu có dữ liệu
     if table_data:
+        # Tần suất sản phẩm
         freq_count = {}
         for row in table_data:
-            items = [item.strip() for item in row['items'].split(',')]
+            items = [i.strip() for i in row['items'].split(',')]
             for item in items:
                 freq_count.setdefault(item, set()).add(row['order_id'])
+        freq_table = [{'product_name': p, 'order_ids': sorted([str(i) for i in ids]), 'count': len(ids)} for p, ids in freq_count.items()]
 
-        freq_table = [{
-            'product_name': product,
-            'order_ids': sorted(order_ids),
-            'count': len(order_ids)
-        } for product, order_ids in freq_count.items()]
         freq_table_sorted = sorted(freq_table, key=lambda x: -x['count'])
 
-        # Gọi thuật toán MAFIA
-        from .mafia import find_maximal_itemsets
-        transactions = [[item.strip() for item in row['items'].split(',')] for row in table_data]
-        mfi_result = find_maximal_itemsets(transactions, min_support=0.3)
-        # Lưu vào session để gợi ý sau này
-        request.session['mafia_maximal_itemsets'] = [list(s) for s in mfi_result]
+        # Chuẩn bị transactions list
+        transactions = [[i.strip() for i in row['items'].split(',')] for row in table_data]
 
-        maximal_table = [{
-            'index': i + 1,
-            'itemset': ', '.join(sorted(itemset)),
-            'length': len(itemset)
-        } for i, itemset in enumerate(mfi_result)]
+        # Gọi hàm tích hợp MAFIA và luật kết hợp
+        maximal_sets, rules = find_maximal_itemsets_and_rules(transactions, min_support=0.3, min_confidence=0.6)
+
+        # Format maximal itemsets
+        maximal_table = [{'index': idx+1, 'itemset': ', '.join(sorted(m)), 'length': len(m)}
+                         for idx, m in enumerate(maximal_sets)]
+        # Format rules
+        rules_table = [
+            {'antecedent': ', '.join(sorted(a)),
+             'consequent': ', '.join(sorted(b)),
+             'support': supp,
+             'confidence': conf,
+             'lift': lift}
+            for (a, b, supp, conf, lift) in rules
+        ]
+        request.session['mafia_maximal_itemsets'] = [list(s) for s in maximal_sets]
 
     return render(request, 'ecom/view_transactions_mafia.html', {
         'form': form,
